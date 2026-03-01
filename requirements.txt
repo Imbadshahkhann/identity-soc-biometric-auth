@@ -1,0 +1,6 @@
+opencv-python
+deepface
+numpy
+cryptography
+tf-keras
+Flask

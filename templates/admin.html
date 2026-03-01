@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Biometric SOC - Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+
+    <div class="container">
+        <header>
+            <div class="logo-area">
+                <div class="logo-icon">
+                    <i class="fa-solid fa-user-shield text-white"></i>
+                </div>
+                <h1>Identity SOC / <span
+                        style="font-weight: 400; color: var(--text-secondary); font-size: 1.2rem;">Admin Panel</span>
+                </h1>
+            </div>
+            <nav>
+                <a href="/">Overview</a>
+                <a href="/admin" class="active">Admin Panel</a>
+            </nav>
+        </header>
+
+        <div class="content-grid" style="grid-template-columns: 1fr; margin-bottom: 2rem;">
+            <div class="glass-card">
+                <div class="metric-header" style="margin-bottom: 1.5rem;">
+                    <span>Registered Users</span>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>User ID</th>
+                                <th>Username</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-grid" style="grid-template-columns: 1fr;">
+            <div class="glass-card">
+                <div class="metric-header" style="margin-bottom: 1.5rem;">
+                    <span>Detailed Authentication Logs</span>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Username</th>
+                                <th>Status / Threat Level</th>
+                                <th>Distance Score</th>
+                                <th>Source IP</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logs-table-body">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchAdminData() {
+            try {
+                const statsRes = await fetch('/api/stats');
+                const statsData = await statsRes.json();
+
+                const usersRes = await fetch('/api/users');
+                const usersData = await usersRes.json();
+
+                // Render Users
+                const usersBody = document.getElementById('users-table-body');
+                usersBody.innerHTML = '';
+                usersData.users.forEach(u => {
+                    usersBody.innerHTML += `
+                    <tr>
+                        <td>#${u.id}</td>
+                        <td style="font-weight: 500;">${u.username}</td>
+                        <td>
+                            <button onclick="deleteUser('${u.username}')" class="btn btn-danger">
+                                <i class="fa-solid fa-trash"></i> Revoke Access
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                });
+
+                // Render Logs (up to 50 for admin view)
+                const logsBody = document.getElementById('logs-table-body');
+                logsBody.innerHTML = '';
+                statsData.logs.forEach(l => {
+                    let badgeClass = 'success';
+                    if (l.status.includes('FAIL')) badgeClass = 'danger';
+
+                    let scoreText = l.match_score !== null ? l.match_score.toFixed(4) : 'N/A';
+                    if (l.status === 'FAIL_INVALID_USER') scoreText = 'N/A (No Vector)';
+                    if (l.status === 'FAIL_NO_FACE') scoreText = 'N/A (No Face)';
+
+                    logsBody.innerHTML += `
+                    <tr>
+                        <td style="color: var(--text-secondary);">${l.timestamp}</td>
+                        <td style="font-weight: 500;">${l.username}</td>
+                        <td><span class="badge ${badgeClass}">${l.status}</span></td>
+                        <td style="font-family: monospace;">${scoreText}</td>
+                        <td style="color: var(--text-secondary);">${l.system_ip || '-'}</td>
+                    </tr>
+                `;
+                });
+
+            } catch (e) {
+                console.error("Error fetching admin data", e);
+            }
+        }
+
+        async function deleteUser(username) {
+            if (!confirm(`Are you sure you want to delete biometric profile for '${username}'?`)) return;
+
+            try {
+                const res = await fetch('/api/delete_user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`User ${username} deleted successfully.`);
+                    fetchAdminData(); // refresh
+                } else {
+                    alert(`Error deleting user: ${data.error}`);
+                }
+            } catch (e) {
+                alert("Network error.");
+            }
+        }
+
+        // Run on load and poll every 5 seconds for admin
+        fetchAdminData();
+        setInterval(fetchAdminData, 5000);
+    </script>
+</body>
+
+</html>

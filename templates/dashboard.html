@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Biometric SOC Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="logo-area">
+            <div class="logo-icon">
+                <i class="fa-solid fa-shield-halved text-white"></i>
+            </div>
+            <h1>Identity SOC / <span style="font-weight: 400; color: var(--text-secondary); font-size: 1.2rem;">Live Monitoring</span></h1>
+        </div>
+        <nav>
+            <a href="/" class="active">Overview</a>
+            <a href="/admin">Admin Panel</a>
+        </nav>
+    </header>
+
+    <div class="dashboard-grid">
+        <div class="glass-card metric-card">
+            <div class="metric-header">
+                <span>Total Users</span>
+                <div class="bg-blue-light text-blue metric-icon"><i class="fa-solid fa-users"></i></div>
+            </div>
+            <div class="metric-value" id="val-users">0</div>
+        </div>
+
+        <div class="glass-card metric-card">
+            <div class="metric-header">
+                <span>Successful Logins</span>
+                <div class="bg-green-light text-green metric-icon"><i class="fa-solid fa-check-circle"></i></div>
+            </div>
+            <div class="metric-value text-green" id="val-success">0</div>
+        </div>
+
+        <div class="glass-card metric-card">
+            <div class="metric-header">
+                <span>Failed Attempts</span>
+                <div class="bg-red-light text-red metric-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            </div>
+            <div class="metric-value text-red" id="val-fails">0</div>
+        </div>
+
+        <div class="glass-card metric-card" style="border-color: rgba(245, 158, 11, 0.4);">
+            <div class="metric-header">
+                <span>Suspicious Entities</span>
+                <div class="bg-orange-light text-orange metric-icon"><i class="fa-solid fa-user-secret"></i></div>
+            </div>
+            <div class="metric-value text-orange" id="val-suspicious">0</div>
+        </div>
+    </div>
+
+    <div class="content-grid">
+        <div class="glass-card">
+            <div class="metric-header" style="margin-bottom: 1rem;">
+                <span>Authentication Trends (Last 15 Attempts)</span>
+                <span class="live-indicator"><div class="live-dot"></div> LIVE</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="authChart"></canvas>
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <div class="metric-header" style="margin-bottom: 1.5rem;">
+                <span>Recent Activity Log</span>
+            </div>
+            <div class="list-container" id="recent-activity-list">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Initialize Chart
+    const ctx = document.getElementById('authChart').getContext('2d');
+    
+    // Gradient for line chart
+    const gradientSuccess = ctx.createLinearGradient(0, 0, 0, 400);
+    gradientSuccess.addColorStop(0, 'rgba(16, 185, 129, 0.5)');   
+    gradientSuccess.addColorStop(1, 'rgba(16, 185, 129, 0.0)');
+
+    const authChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Authentication Status (1=Success, 0=Fail)',
+                data: [],
+                borderColor: '#10b981',
+                backgroundColor: gradientSuccess,
+                borderWidth: 2,
+                pointBackgroundColor: '#fff',
+                pointBorderColor: '#10b981',
+                pointBorderWidth: 2,
+                pointRadius: 4,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    min: -0.2, max: 1.2,
+                    ticks: { 
+                        stepSize: 1, color: '#94a3b8',
+                        callback: function(value) {
+                            if(value === 1) return "Success";
+                            if(value === 0) return "Fail";
+                            return "";
+                        }
+                    },
+                    grid: { color: 'rgba(65, 84, 128, 0.2)' }
+                },
+                x: {
+                    ticks: { color: '#94a3b8' },
+                    grid: { color: 'rgba(65, 84, 128, 0.2)' }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.raw === 1 ? 'Successful Login' : 'Failed Attempt';
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Fetch Data
+    async function updateDashboard() {
+        try {
+            const res = await fetch('/api/stats');
+            const data = await res.json();
+
+            // Update Metrics View
+            document.getElementById('val-users').textContent = data.total_users;
+            document.getElementById('val-success').textContent = data.successful_logins;
+            document.getElementById('val-fails').textContent = data.failed_attempts;
+            document.getElementById('val-suspicious').textContent = data.suspicious_activity.length;
+
+            // Update Chart Data
+            authChart.data.labels = data.graph_labels;
+            
+            // Adjust chart color based on most recent event
+            const latestStatus = data.graph_data[data.graph_data.length - 1];
+            if(latestStatus === 0) {
+                authChart.data.datasets[0].borderColor = '#ef4444'; // red
+            } else {
+                authChart.data.datasets[0].borderColor = '#10b981'; // green
+            }
+            
+            authChart.data.datasets[0].data = data.graph_data;
+            authChart.update();
+
+            // Update Activity List (Top 5)
+            const listEl = document.getElementById('recent-activity-list');
+            listEl.innerHTML = '';
+            
+            const recentTop5 = data.logs.slice(0, 5);
+            recentTop5.forEach(log => {
+                let statusClass = 'success';
+                let icon = 'fa-check';
+                if(log.status.includes('FAIL')) {
+                    statusClass = 'danger';
+                    icon = 'fa-xmark';
+                }
+
+                const item = document.createElement('div');
+                item.className = `list-item ${statusClass}`;
+                item.innerHTML = `
+                    <div style="display:flex; gap:1rem; align-items:center;">
+                        <div style="width: 30px; text-align:center;" class="text-${statusClass === 'danger' ? 'red' : 'green'}">
+                            <i class="fa-solid ${icon}"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight: 500;">${log.username}</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">${log.timestamp} | IP: ${log.system_ip || 'Unknown'}</div>
+                        </div>
+                    </div>
+                    <div>
+                        <span class="badge ${statusClass}">${log.status}</span>
+                    </div>
+                `;
+                listEl.appendChild(item);
+            });
+
+        } catch (e) {
+            console.error("Error fetching dashboard data", e);
+        }
+    }
+
+    // Run on load and poll every 2 seconds
+    updateDashboard();
+    setInterval(updateDashboard, 2000);
+</script>
+</body>
+</html>
