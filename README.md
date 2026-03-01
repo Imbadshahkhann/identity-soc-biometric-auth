@@ -28,6 +28,24 @@ An AI-driven biometric authentication system with a real-time SOC (Security Oper
 
 ---
 
+## 📸 Project Screenshots
+
+### 🔐 Biometric Authentication (CLI)
+![CLI](screenshots/biometric-authentication-success-cli.png)
+
+### 🌐 Flask SOC Server
+![Server](screenshots/soc-webapp-flask-server.png)
+
+### 📊 SOC Dashboard – Live Monitoring
+![Dashboard](screenshots/dashboard.png)
+
+### 🛠️ Admin Panel – User Access Control
+![Admin](screenshots/admin.png)
+
+---
+
+## 📸 System Workflow
+
 ## 📸 System Workflow
 
 1. User registers using face biometrics
